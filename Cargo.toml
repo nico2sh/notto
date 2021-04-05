@@ -1,0 +1,17 @@
+[package]
+name = "notto"
+version = "0.1.0"
+authors = ["Nico Hormazabal <nhormazabal@newrelic.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+uuid = { version = "0.8", features = ["serde", "v4"] }
+thiserror = "1.0"
+chrono = "0.4"
+clap = "3.0.0-beta.2"
+serde = { version = "1.0.123", features = ["derive", "rc"] }
+serde_yaml = "0.8"
+dirs = "3.0"
+pulldown-cmark = "0.8.0"
