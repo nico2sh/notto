@@ -18,6 +18,8 @@ pub struct Notto {
 
 impl Notto {
     pub fn new() -> Result<Self, NottoError> {
+        env_logger::init();
+
         let config = Config::load_config(Notto::get_home_dir()?)?;
 
         Ok(Self { config })
@@ -66,7 +68,7 @@ impl Notto {
 
     fn get_temp_file() -> Result<PathBuf, NottoError> {
         let mut file_path = Notto::get_temp_dir()?;
-        let uuid = Uuid::new_v4();
+        let uuid = Uuid::new_v4().to_simple();
         let file_name = format!("{}.md", uuid.to_string());
         file_path.push(file_name);
         fs::File::create(&file_path)?;

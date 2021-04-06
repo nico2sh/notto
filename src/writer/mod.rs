@@ -61,16 +61,17 @@ impl Writer {
     pub fn get_file_name_from_note(&self, note: &Note) -> String {
         let special_chars = [ ' ', ':', '.', '/', '\\', '<', '>', '"', '|', '?', '*', '^', '\'' ];
         let mut file_name = note.front_matter.title.clone();
-        file_name.retain(|c| special_chars.contains(&c));
+        file_name.retain(|c| !special_chars.contains(&c));
+        file_name = file_name.trim().to_string();
         if file_name.len() > FILE_NAME_LENGTH {
             file_name = file_name[..FILE_NAME_LENGTH].to_string();
         }
         
-        if !file_name.is_empty() {
-            file_name
-        } else {
-            note.front_matter.id[..FILE_NAME_LENGTH].to_string()
+        if file_name.is_empty() {
+            file_name = note.front_matter.id[..FILE_NAME_LENGTH].to_string();
         }
+
+        format!("{}.md", file_name)
     }
 
     fn note_file_exists<P, S>(&self, path: P, file_name: S) -> Option<NoteFileType> where P: AsRef<Path>, S: AsRef<str> {

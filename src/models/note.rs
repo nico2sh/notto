@@ -45,7 +45,6 @@ impl Note {
 
     pub fn to_text(&self) -> String {
         let mut text = String::new();
-        text.push_str("---\n");
         let front_matter_text = match serde_yaml::to_string(&self.front_matter) {
             Ok(fm_text) => fm_text,
             Err(_e) => String::new()

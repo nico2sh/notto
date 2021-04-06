@@ -82,7 +82,7 @@ impl Config {
         self.get_base_dir_from(context)
     }
 
-    fn get_base_dir_from<S>(&self, context: S) -> Result<PathBuf, NottoError> where S: AsRef<str> {
+    pub fn get_base_dir_from<S>(&self, context: S) -> Result<PathBuf, NottoError> where S: AsRef<str> {
         match &self.get_config_context(&context)?.base_dir {
             Some(base_dir) => Ok(base_dir.clone()),
             None => {
