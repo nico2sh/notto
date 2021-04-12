@@ -1,19 +1,22 @@
-use std::{fs::{self}, io::{Read}, path::{PathBuf}, process};
+use std::{fs::{self}, io::{Read}, path::{Path, PathBuf}, process::{self, ExitStatus}};
 
 use chrono::{Datelike, Utc};
 use errors::NottoError;
-use models::{config::{Config}, note::Note};
+use finder::{FindCondition, Finder};
+use models::{config::{Config}, front_matter::FrontMatter, note::Note};
 use uuid::Uuid;
 use writer::Writer;
 
-mod models;
+pub mod models;
 mod writer;
-mod errors;
+mod finder;
+pub mod errors;
 
 const BASE_CONFIG_DIR: &str = ".notto";
+const PATH_SEPARATOR: &str = "/";
 
 pub struct Notto {
-    config: Config,
+    pub config: Config,
 }
 
 impl Notto {
@@ -25,34 +28,89 @@ impl Notto {
         Ok(Self { config })
     }
 
-    pub fn create_journal_entry(&self) -> Result<(), NottoError> {
-        let note_text = self.get_text_from_editor()?;
-        match note_text {
-            Some(note_text) => {
-                let note = Note::from_text(note_text);
+    pub fn open_by_path<P>(&self, note_path: P) -> Result<(), NottoError> where P: AsRef<Path> {
+        let path = self.config.get_notes_dir()?.join(note_path);
 
-                let date = Utc::now().naive_local().date();
-                let mut path = PathBuf::new();
-                path.push(date.year().to_string());
-                path.push(date.month().to_string());
-                path.push(date.day().to_string());
+        self.open_editor_with_path(&path)?;
 
-                let writer = Writer::new(self.config.get_base_dir()?.clone());
-                let file_name = writer.get_file_name_from_note(&note);
-                writer.save_note_at(note, path, file_name, false)?;
-            }
-            None => {}
-        }
         Ok(())
     }
 
-    pub fn get_text_from_editor(&self) -> Result<Option<String>, NottoError> {
+    pub fn find(&self, conditions: Vec<FindCondition>) -> Result<(), NottoError> {
+        let finder = Finder::new(self.config.get_notes_dir()?);
+        let rx = finder.find(PathBuf::new(), conditions)?;
+
+        Ok(())
+    }
+
+    pub fn create_or_open_note_at<S: AsRef<str>>(&self, dest_path: Option<S>) -> Result<PathBuf, NottoError> {
+        let writer = Writer::new(self.config.get_notes_dir()?);
+
+        if let Some(dest_path) = dest_path {
+            let path_segments = dest_path.as_ref().split(PATH_SEPARATOR).into_iter().collect::<Vec<_>>();
+            let mut path = PathBuf::new();
+            let segments = path_segments.len();
+
+            if segments > 1 {
+                for i in 0..(segments - 1) {
+                    path.push(path_segments[i]);
+                }
+                writer.create_dir_all(&path)?;
+            }
+            let file_name = path_segments[segments - 1].to_string();
+            let result_path = match writer.note_file_exists(&path, &file_name) {
+                Some(note_type) => match note_type {
+                    writer::NoteFileType::File(file_name) => path.join(file_name),
+                    writer::NoteFileType::Directory(dir_name) => path.join(dir_name).join(writer::DIR_ROOT_NOTE_NAME)
+                },
+                None => {
+                    let front_matter = FrontMatter::default();
+                    let note = Note { front_matter, content: String::new() };
+                    writer.save_note_at(note, &path, &file_name, false)?
+                }
+            };
+
+            let status = self.open_editor_with_path(writer.get_full_path(&result_path))?;
+
+            if status.success() {
+                Ok(result_path)
+            } else {
+                Err(NottoError::CreateNoteError { message: format!("Error saving note, exit code: {}", status) })
+            }
+
+        } else {
+            // A note without name
+            let note_text = self.get_text_from_editor()?;
+            if !note_text.is_empty() {
+                let note = Note::from_text(&note_text);
+                let file_name = writer.get_file_name_from_note(&note);
+                writer.save_note_at(note, PathBuf::new(), file_name, false)
+            } else {
+                Err(NottoError::CreateNoteError { message: format!("No content in the note, not saving") })
+            }
+        }
+    }
+
+    pub fn create_journal_entry<S: AsRef<str>>(&self, name: Option<S>) -> Result<PathBuf, NottoError> {
+        let date = Utc::now().naive_local().date();
+        let note_name = match name {
+            Some(n) => {
+                let name_segments = n.as_ref().split(PATH_SEPARATOR);
+                match name_segments.last() {
+                    Some(last) => String::from(last),
+                    None => String::from("today")
+                }
+            }
+            None => String::from("today")
+        };
+        let path = format!("{}/{}/{}/{}", date.year().to_string(), date.month().to_string(), date.day().to_string(), note_name);
+        self.create_or_open_note_at(Some(path))
+    }
+
+    pub fn get_text_from_editor(&self) -> Result<String, NottoError> {
         let file_path = Notto::get_temp_file()?;
 
-        let editor = self.config.get_editor()?;
-        let status = process::Command::new(editor)
-            .arg(&file_path)
-            .status()?;
+        let status = self.open_editor_with_path(&file_path)?;
 
         if status.success() {
             let mut editable = String::new();
@@ -60,10 +118,19 @@ impl Notto {
                 .expect("Can't open file")
                 .read_to_string(&mut editable)?;
             
-            Ok(Some(editable))
+            Ok(editable)
         } else {
-            Ok(None)
+            Err(NottoError::CreateNoteError { message: format!("Error saving note, exit code: {}", status) })
         }
+    }
+
+    fn open_editor_with_path<P>(&self, path: P) -> Result<ExitStatus, NottoError> where P: AsRef<Path> {
+        let editor = self.config.get_editor()?;
+        let status = process::Command::new(editor)
+            .arg(path.as_ref())
+            .status()?;
+
+        Ok(status)
     }
 
     fn get_temp_file() -> Result<PathBuf, NottoError> {

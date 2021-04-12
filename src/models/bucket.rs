@@ -25,7 +25,7 @@ pub struct Bucket {
 impl Bucket {
     pub fn process(&self, config: Config, temp_dir: PathBuf) {
         for item in &self.items {
-            match config.get_base_dir_from(&item.context) {
+            match config.get_notes_dir_from(&item.context) {
                 Ok(base_path) => {
                     let temp_note_path = temp_dir.join(&item.file);
                     let written = match std::fs::read_to_string(&temp_note_path) {

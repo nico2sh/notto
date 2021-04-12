@@ -1,14 +1,24 @@
 use pulldown_cmark::{Options, Parser};
 use super::front_matter::FrontMatter;
 
+#[derive(Debug, Clone)]
 pub struct Note {
     pub front_matter: FrontMatter,
     pub content: String
 }
 
+impl Default for Note {
+    fn default() -> Self {
+        Self {
+            front_matter: FrontMatter::default(),
+            content: String::new()
+        }
+    }
+}
+
 impl Note {
-    pub fn new(front_matter: FrontMatter, content: String) -> Self {
-        Self { front_matter, content }
+    pub fn new<S: Into<String>>(front_matter: FrontMatter, content: S) -> Self {
+        Self { front_matter, content: content.into() }
     }
 
     pub fn from_text<S>(text: S) -> Note where S: AsRef<str> {
@@ -35,9 +45,9 @@ impl Note {
             Ok(f) => f,
             Err(_) => FrontMatter::default()
         };
-        if fm.has_default_title() {
+        if fm.title == None {
             let title = extract_title(&cont);
-            fm.title = title;
+            fm.title = Some(title);
         }
 
         Note::new(fm, cont)
@@ -54,6 +64,13 @@ impl Note {
         text.push_str(&self.content);
 
         text
+    }
+
+    pub fn get_title(&self) -> String {
+        match &self.front_matter.title {
+            Some(title) => title.clone(),
+            None => extract_title(&self.content)
+        }
     }
 }
 
@@ -128,7 +145,7 @@ Actually three.
 And an extra line break.
 "#;
         let note = Note::from_text(text);
-        assert_eq!("test note", &note.front_matter.title);
+        assert_eq!(Some("test note".to_string()), note.front_matter.title);
         assert_eq!(NaiveDate::from_ymd(2021, 03, 28), note.front_matter.date);
         assert_eq!(NaiveTime::from_hms(17, 08, 13), note.front_matter.time);
         println!("{}", &note.content);
@@ -146,7 +163,7 @@ Actually three.
 And an extra line break.
 "#;
         let note = Note::from_text(text);
-        assert_eq!("This is a demo note", &note.front_matter.title);
+        assert_eq!(Some("This is a demo note".to_string()), note.front_matter.title);
     }
 
     #[test]
@@ -161,7 +178,7 @@ Actually three.
 And an extra line break.
 "#;
         let note = Note::from_text(text);
-        assert_eq!("This is a demo note", &note.front_matter.title);
+        assert_eq!(Some("This is a demo note".to_string()), note.front_matter.title);
     }
 
     #[test]
@@ -176,7 +193,7 @@ Actually three.
 And an extra line break.
 "#;
         let note = Note::from_text(text);
-        assert_eq!("This is a demo note", &note.front_matter.title);
+        assert_eq!(Some("This is a demo note".to_string()), note.front_matter.title);
     }
 
     #[test]
@@ -192,6 +209,6 @@ Actually three.
 And an extra line break.
 "#;
         let note = Note::from_text(text);
-        assert_eq!("This is a demo note", &note.front_matter.title);
+        assert_eq!(Some("This is a demo note".to_string()), note.front_matter.title);
     }
 }

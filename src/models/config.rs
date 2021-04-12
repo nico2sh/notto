@@ -77,19 +77,19 @@ impl Config {
     /// Gets the notes directory for the current context
     ///
     /// Defaults to the default directory
-    pub fn get_base_dir(&self) -> Result<PathBuf, NottoError> {
+    pub fn get_notes_dir(&self) -> Result<PathBuf, NottoError> {
         let context = self.get_context()?;
-        self.get_base_dir_from(context)
+        self.get_notes_dir_from(context)
     }
 
-    pub fn get_base_dir_from<S>(&self, context: S) -> Result<PathBuf, NottoError> where S: AsRef<str> {
+    pub fn get_notes_dir_from<S>(&self, context: S) -> Result<PathBuf, NottoError> where S: AsRef<str> {
         match &self.get_config_context(&context)?.base_dir {
             Some(base_dir) => Ok(base_dir.clone()),
             None => {
                 if context.as_ref() == DEFAULT_CONTEXT {
                     Config::default_directory()   
                 } else {
-                    self.get_base_dir_from(DEFAULT_CONTEXT)
+                    self.get_notes_dir_from(DEFAULT_CONTEXT)
                 }
             }
         }

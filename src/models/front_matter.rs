@@ -6,29 +6,19 @@ use uuid::Uuid;
 
 const DEFAULT_TITLE: &str = "untitled";
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FrontMatter {
     #[serde(default = "default_id")]
     pub id: String,
-    #[serde(default = "default_title")]
-    pub title: String,
+    pub title: Option<String>,
     #[serde(deserialize_with = "from_date_string", serialize_with = "to_date_string", default = "default_date")]
     pub date: NaiveDate,
     #[serde(deserialize_with = "from_time_string", serialize_with = "to_time_string", default = "default_time")]
     pub time: NaiveTime,
 }
 
-impl FrontMatter {
-    pub fn has_default_title(&self) -> bool {
-        self.title == DEFAULT_TITLE
-    }
-}
-
 fn default_id() -> String {
     Uuid::new_v4().to_simple().to_string()
-}
-fn default_title() -> String {
-    DEFAULT_TITLE.to_string()
 }
 fn default_date() -> NaiveDate {
     let utc = Utc::now();
@@ -43,7 +33,7 @@ impl Default for FrontMatter {
     fn default() -> Self {
         Self {
             id: default_id(),
-            title: default_title(),
+            title: None,
             date: default_date(),
             time: default_time()
         }
@@ -113,7 +103,7 @@ mod tests {
     #[test]
     fn serializes_date() {
         let id = "123e4567-e89b-12d3-a456-426614174000".to_string();
-        let title = "test_note".to_string();
+        let title = Some("test_note".to_string());
         let date = NaiveDate::from_ymd(2021, 4, 7);
         let time = NaiveTime::from_hms(23, 08, 15);
         let front_matter = FrontMatter {
@@ -135,7 +125,7 @@ date: 2021-05-01"#;
 
         let front_matter: FrontMatter = serde_yaml::from_str(fm).unwrap();
 
-        assert_eq!("serialized note".to_string(), front_matter.title);
+        assert_eq!(Some("serialized note".to_string()), front_matter.title);
         assert_eq!(dt.clone(), front_matter.date);
     }
 }

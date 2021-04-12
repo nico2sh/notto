@@ -1,4 +1,4 @@
 pub mod config;
 pub mod note;
-mod front_matter;
+pub mod front_matter;
 mod bucket;
