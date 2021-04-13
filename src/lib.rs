@@ -5,10 +5,10 @@ use errors::NottoError;
 use finder::{FindCondition, Finder};
 use models::{config::{Config}, front_matter::FrontMatter, note::Note};
 use uuid::Uuid;
-use writer::Writer;
+use io::ReaderWriter;
 
 pub mod models;
-mod writer;
+mod io;
 mod finder;
 pub mod errors;
 
@@ -44,7 +44,7 @@ impl Notto {
     }
 
     pub fn create_or_open_note_at<S: AsRef<str>>(&self, dest_path: Option<S>) -> Result<PathBuf, NottoError> {
-        let writer = Writer::new(self.config.get_notes_dir()?);
+        let writer = ReaderWriter::new(self.config.get_notes_dir()?);
 
         if let Some(dest_path) = dest_path {
             let path_segments = dest_path.as_ref().split(PATH_SEPARATOR).into_iter().collect::<Vec<_>>();
@@ -60,8 +60,8 @@ impl Notto {
             let file_name = path_segments[segments - 1].to_string();
             let result_path = match writer.note_file_exists(&path, &file_name) {
                 Some(note_type) => match note_type {
-                    writer::NoteFileType::File(file_name) => path.join(file_name),
-                    writer::NoteFileType::Directory(dir_name) => path.join(dir_name).join(writer::DIR_ROOT_NOTE_NAME)
+                    io::NoteFileType::File(file_name) => path.join(file_name),
+                    io::NoteFileType::Directory(dir_name) => path.join(dir_name).join(io::DIR_ROOT_NOTE_NAME)
                 },
                 None => {
                     let front_matter = FrontMatter::default();
@@ -98,10 +98,10 @@ impl Notto {
                 let name_segments = n.as_ref().split(PATH_SEPARATOR);
                 match name_segments.last() {
                     Some(last) => String::from(last),
-                    None => String::from("today")
+                    None => String::from(io::DIR_ROOT_NOTE_NAME)
                 }
             }
-            None => String::from("today")
+            None => String::from(io::DIR_ROOT_NOTE_NAME)
         };
         let path = format!("{}/{}/{}/{}", date.year().to_string(), date.month().to_string(), date.day().to_string(), note_name);
         self.create_or_open_note_at(Some(path))

@@ -4,8 +4,6 @@ use chrono::{NaiveDate, NaiveTime, Utc};
 use serde::{Serialize, Deserialize, Deserializer, Serializer, de::{Error, Unexpected, Visitor}};
 use uuid::Uuid;
 
-const DEFAULT_TITLE: &str = "untitled";
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FrontMatter {
     #[serde(default = "default_id")]

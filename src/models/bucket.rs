@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use log::error;
 use serde::{Serialize, Deserialize};
 
-use crate::writer::Writer;
+use crate::io::ReaderWriter;
 
 use super::{config::Config, note::Note};
 
@@ -30,7 +30,7 @@ impl Bucket {
                     let temp_note_path = temp_dir.join(&item.file);
                     let written = match std::fs::read_to_string(&temp_note_path) {
                         Ok(text) => {
-                            let writer = Writer::new(base_path);
+                            let writer = ReaderWriter::new(base_path);
                             let note = Note::from_text(text);
                             let file_name = item.file_name.as_ref().map(|f| f.clone()).unwrap_or_else(|| writer.get_file_name_from_note(&note));
                             writer.save_note_at(note, &item.dest_path, file_name, false).and_then(|_| {

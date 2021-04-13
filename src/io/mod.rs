@@ -14,11 +14,11 @@ pub enum NoteFileType {
     Directory(String)
 }
 
-pub struct Writer {
+pub struct ReaderWriter {
     base_path: PathBuf
 }
 
-impl Writer {
+impl ReaderWriter {
     pub fn new(base_path: PathBuf) -> Self { Self { base_path } }
 
     pub fn save_note_at<P, S>(&self, note: Note, path: P, file_name: S, overwrite: bool) -> Result<PathBuf, NottoError> where P: AsRef<Path>, S: AsRef<str> {
@@ -217,7 +217,7 @@ mod test {
 
     use crate::{errors::NottoError, models::{front_matter::FrontMatter, note::Note}};
 
-    use super::Writer;
+    use super::ReaderWriter;
     use super::NoteFileType;
     use super::FILE_NAME_EXTENSION;
     use super::DIR_ROOT_NOTE_NAME;
@@ -232,7 +232,7 @@ mod test {
             std::fs::remove_dir_all(&base_path)?;
         }
         std::fs::create_dir(&base_path)?;
-        let writer = Writer::new(base_path.clone());
+        let writer = ReaderWriter::new(base_path.clone());
         // Setup ================
 
         let note_1 = Note::new(FrontMatter::default(), "This is a test note");

@@ -14,19 +14,16 @@ fn main() {
     let matches = App::new("notto")
         .author("Nico")
         .subcommand(App::new("new")
-            .about("Creates a new note")
+            .about("Creates a new note, you can add the note name in the note hierarchy. Examples:\n`notto new`\n`notto new meeting_minutes`\n`notto new work/resources`")
+            .arg(Arg::new("name")
+                .about("Name of the note file, no need to add extension, you can use the note/subnote/notename to nest notes")
+                .index(1))
             .arg(Arg::new("journal")
                 .about("Add an entry under a Y/M/D directory structure")
                 .short('j')
                 .long("journal")
                 .required(false)
                 .takes_value(false))
-            .arg(Arg::new("name")
-                .about("Name of the note file, no need to add extension, you can use the note/subnote/notename to nest notes")
-                .short('n')
-                .long("name")
-                .required(false)
-                .takes_value(true))
             )
         .subcommand(App::new("open")
             .about("Opens a note"))
@@ -107,11 +104,10 @@ fn get_selections_for_path<P>(path: P) -> Result<Vec<PathEntry>, NottoError> whe
                 if let Ok(note_text) = fs::read_to_string(&path) {
                     let note = Note::from_text(note_text);
                     let mut name = note.get_title();
-                    if name.is_empty() {
-                        if let Some(file_name) = path.file_name() {
-                            name = file_name.to_string_lossy().to_string();
-                        }
-                    } 
+
+                    if let Some(file_name) = path.file_name() {
+                        name = format!("{} [{}]", name, file_name.to_string_lossy());
+                    }
                     result.push(PathEntry { name, path });
                 }
             }
@@ -136,6 +132,7 @@ impl ToString for PathEntry {
 }
 
 impl PartialOrd for PathEntry {
+    // We want directories come first
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         let self_dir = self.path.is_dir();
         let other_dir = other.path.is_dir();
@@ -143,7 +140,7 @@ impl PartialOrd for PathEntry {
         if self_dir == other_dir {
             self.name.partial_cmp(&other.name)
         } else {
-            if self_dir { Some(std::cmp::Ordering::Greater ) } else { Some(std::cmp::Ordering::Less ) }
+            if self_dir { Some(std::cmp::Ordering::Less ) } else { Some(std::cmp::Ordering::Greater ) }
         }
     }
 }
