@@ -1,15 +1,16 @@
 use std::{fs::{self}, io::{Read}, path::{Path, PathBuf}, process::{self, ExitStatus}};
 
 use chrono::{Datelike, Utc};
+use crossbeam_channel::Receiver;
 use errors::NottoError;
-use finder::{FindCondition, Finder};
+use finder::{FindCondition, Finder, NoteFindMessage};
 use models::{config::{Config}, front_matter::FrontMatter, note::Note};
 use uuid::Uuid;
 use io::ReaderWriter;
 
 pub mod models;
 mod io;
-mod finder;
+pub mod finder;
 pub mod errors;
 
 const BASE_CONFIG_DIR: &str = ".notto";
@@ -36,11 +37,12 @@ impl Notto {
         Ok(())
     }
 
-    pub fn find(&self, conditions: Vec<FindCondition>) -> Result<(), NottoError> {
+    /// Returns a receiver with the find results
+    pub fn find(&self, conditions: Vec<FindCondition>) -> Result<Receiver<NoteFindMessage>, NottoError> {
         let finder = Finder::new(self.config.get_notes_dir()?);
         let rx = finder.find(PathBuf::new(), conditions)?;
 
-        Ok(())
+        Ok(rx)
     }
 
     pub fn create_or_open_note_at<S: AsRef<str>>(&self, dest_path: Option<S>) -> Result<PathBuf, NottoError> {

@@ -1,5 +1,6 @@
 
 use std::{fs, path::{Path, PathBuf}};
+use std::sync::{Arc, Mutex};
 
 use console::Term;
 use dialoguer::Select;
@@ -9,6 +10,8 @@ use clap::{App, Arg, ArgMatches};
 use notto::Notto;
 use notto::models::note::Note;
 use notto::errors::NottoError;
+use notto::finder::FindCondition;
+use notto::finder::NoteFindMessage;
 
 fn main() {
     let matches = App::new("notto")
@@ -27,11 +30,18 @@ fn main() {
             )
         .subcommand(App::new("open")
             .about("Opens a note"))
+        .subcommand(App::new("find")
+            .about("Finds a note")
+            .arg(Arg::new("text")
+                .about("Text to find in the note")
+                .index(1)
+                .required(true)))
         .get_matches();
 
     match matches.subcommand() {
         Some(("new", matches)) => new(matches),
         Some(("open", matches)) => { open(matches); },
+        Some(("find", matches)) => { find(matches); },
         Some(_) => {}
         None => {}
     };
@@ -66,6 +76,37 @@ fn open(matches: &ArgMatches) -> Result<(), NottoError> {
     Ok(())
 }
 
+fn find(matches: &ArgMatches) -> Result<(), NottoError> {
+    let notto = Notto::new()?;
+
+    let find_text = matches.value_of("text");
+
+    if let Some(text) = find_text {
+        let mut conditions = vec![];
+        conditions.push(FindCondition::Text(text.to_string()));
+        let rx = notto.find(conditions)?;
+
+        let theme = ColorfulTheme::default();
+        let mut selection = Select::with_theme(&theme);
+
+        match rx.try_recv() {
+            Ok(msg) => {
+                if let NoteFindMessage::Result(note_result) = msg {
+                    selection.item(PathEntry {
+                        name: note_result.note.get_title(),
+                        path: note_result.path,
+                        is_dir: false});
+                }
+            },
+            Err(e) => {}
+        }
+
+        selection.interact_on_opt(&Term::stderr())?; 
+    }
+
+    Ok(())
+}
+
 fn display_selection_for_path<P, A>(base_path: P, path: A) -> Result<Option<PathBuf>, NottoError> where P: AsRef<Path>, A: AsRef<Path> {
     let full_path = base_path.as_ref().join(&path);
     let items = get_selections_for_path(full_path)?;
@@ -95,20 +136,28 @@ fn get_selections_for_path<P>(path: P) -> Result<Vec<PathEntry>, NottoError> whe
     for path in fs::read_dir(path)? {
         if let Ok(dir_entry) = path {
             let path = dir_entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name() {
-                    let name = format!("[{}]", name.to_string_lossy());
-                    result.push(PathEntry { name, path });
-                }
+            let hidden = if let Some(file_name) = path.file_name() {
+                file_name.to_string_lossy().starts_with(".")
             } else {
-                if let Ok(note_text) = fs::read_to_string(&path) {
-                    let note = Note::from_text(note_text);
-                    let mut name = note.get_title();
+                false
+            };
 
-                    if let Some(file_name) = path.file_name() {
-                        name = format!("{} [{}]", name, file_name.to_string_lossy());
+            if !hidden {
+                if path.is_dir() {
+                    if let Some(name) = path.file_name() {
+                        let name = name.to_string_lossy().to_string();
+                        result.push(PathEntry { name, path, is_dir: true });
                     }
-                    result.push(PathEntry { name, path });
+                } else {
+                    if let Ok(note_text) = fs::read_to_string(&path) {
+                        let note = Note::from_text(note_text);
+                        let mut name = note.get_title();
+
+                        if let Some(file_name) = path.file_name() {
+                            name = format!("{} [{}]", name, file_name.to_string_lossy());
+                        }
+                        result.push(PathEntry { name, path, is_dir: false });
+                    }
                 }
             }
         };
@@ -123,11 +172,16 @@ fn get_selections_for_path<P>(path: P) -> Result<Vec<PathEntry>, NottoError> whe
 struct PathEntry {
     name: String,
     path: PathBuf,
+    is_dir: bool,
 }
 
 impl ToString for PathEntry {
     fn to_string(&self) -> String {
-        self.name.clone()
+        if self.is_dir {
+            format!("[{}]", self.name.clone())
+        } else {
+            self.name.clone()
+        }
     }
 }
 
@@ -138,7 +192,11 @@ impl PartialOrd for PathEntry {
         let other_dir = other.path.is_dir();
 
         if self_dir == other_dir {
-            self.name.partial_cmp(&other.name)
+            if let (Ok(s), Ok(o)) = (self.name.parse::<i32>(), other.name.parse::<i32>()) {
+                s.partial_cmp(&o)
+            } else {
+                self.name.partial_cmp(&other.name)
+            }
         } else {
             if self_dir { Some(std::cmp::Ordering::Less ) } else { Some(std::cmp::Ordering::Greater ) }
         }

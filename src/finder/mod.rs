@@ -1,7 +1,7 @@
 use std::{fs, path::{Path, PathBuf}, sync::Arc, thread};
 use chrono::{NaiveDate, NaiveTime};
 use crossbeam_utils::sync::WaitGroup;
-use log::error;
+use log::{error, warn};
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::{errors::NottoError, models::note::Note};
@@ -13,8 +13,8 @@ pub enum NoteFindMessage {
 
 #[derive(Debug)]
 pub struct NoteFindResult {
-    note: Note,
-    path: PathBuf
+    pub note: Note,
+    pub path: PathBuf
 }
 
 #[derive(Debug, Clone)]
@@ -82,12 +82,18 @@ impl Finder {
                 let tx = sender.clone();
                 let wg_cloned = wg.clone();
                 thread::spawn(move || {
-                    let note_content = fs::read_to_string(&p).unwrap();
-                    let note = Note::from_text(note_content);
-                    if f(&note) {
-                        let note_find_result = NoteFindResult { note, path: p };
-                        if let Err(e) = tx.send(NoteFindMessage::Result(note_find_result)) { error!("{}", e); }
-                    };
+                    match fs::read_to_string(&p) {
+                        Ok(note_content) => {
+                            let note = Note::from_text(note_content);
+                            if f(&note) {
+                                let note_find_result = NoteFindResult { note, path: p };
+                                if let Err(e) = tx.send(NoteFindMessage::Result(note_find_result)) { error!("{}", e); }
+                            };
+                        }
+                        Err(e) => {
+                            warn!("Error reading file at {}: {}", p.to_string_lossy(), e);
+                        }
+                    }
 
                     drop(wg_cloned);
                 });
