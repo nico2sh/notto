@@ -6,10 +6,10 @@ use errors::NottoError;
 use finder::{FindCondition, Finder, NoteFindMessage};
 use models::{config::{Config}, front_matter::FrontMatter, note::Note};
 use uuid::Uuid;
-use io::ReaderWriter;
+use io::{ReaderWriter, browser::{NoteBrowser, NottoPath, PathEntry}};
 
 pub mod models;
-mod io;
+pub mod io;
 pub mod finder;
 pub mod errors;
 
@@ -29,8 +29,9 @@ impl Notto {
         Ok(Self { config })
     }
 
-    pub fn open_by_path<P>(&self, note_path: P) -> Result<(), NottoError> where P: AsRef<Path> {
-        let path = self.config.get_notes_dir()?.join(note_path);
+    pub fn open_by_path<P: Into<NottoPath>>(&self, note_path: P) -> Result<(), NottoError> {
+        let notto_path: NottoPath = note_path.into();
+        let path = self.config.get_notes_dir()?.join(notto_path);
 
         self.open_editor_with_path(&path)?;
 
@@ -43,6 +44,11 @@ impl Notto {
         let rx = finder.find(PathBuf::new(), conditions)?;
 
         Ok(rx)
+    }
+
+    pub fn browse(&self, path: &NottoPath) -> Result<Vec<PathEntry>, NottoError> {
+        let browser = NoteBrowser::new(self.config.get_notes_dir()?);
+        browser.get_selections_for_path(path)
     }
 
     pub fn create_or_open_note_at<S: AsRef<str>>(&self, dest_path: Option<S>) -> Result<PathBuf, NottoError> {

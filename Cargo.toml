@@ -20,5 +20,5 @@ pulldown-cmark = "0.8.0"
 crossbeam-channel = "0.5"
 crossbeam-utils = "0.8"
 console = "0.14.1"
-cursive = "0.16"
+cursive = { version = "0.16", default-features = false, features = ['crossterm-backend'] }
 dialoguer = "0.8.0"

@@ -1,3 +1,4 @@
+mod ui;
 
 use std::{fs, path::{Path, PathBuf}};
 use std::sync::{Arc, Mutex};
@@ -7,7 +8,7 @@ use dialoguer::Select;
 use dialoguer::theme::ColorfulTheme;
 
 use clap::{App, Arg, ArgMatches};
-use notto::Notto;
+use notto::{Notto, io::browser::NottoPath};
 use notto::models::note::Note;
 use notto::errors::NottoError;
 use notto::finder::FindCondition;
@@ -67,9 +68,8 @@ fn new(matches: &ArgMatches) {
 
 fn open(matches: &ArgMatches) -> Result<(), NottoError> {
     let notto = Notto::new()?;
-    let path_to_list = notto.config.get_notes_dir()?;
 
-    if let Some(note_path) = display_selection_for_path(path_to_list, PathBuf::new())? {
+    if let Some(note_path) = display_selection_for_path(&notto, &NottoPath::new())? {
         notto.open_by_path(note_path)?;
     }
 
@@ -92,10 +92,10 @@ fn find(matches: &ArgMatches) -> Result<(), NottoError> {
         match rx.try_recv() {
             Ok(msg) => {
                 if let NoteFindMessage::Result(note_result) = msg {
-                    selection.item(PathEntry {
+                    /*selection.item(PathEntry {
                         name: note_result.note.get_title(),
                         path: note_result.path,
-                        is_dir: false});
+                        is_dir: false});*/
                 }
             },
             Err(e) => {}
@@ -107,11 +107,11 @@ fn find(matches: &ArgMatches) -> Result<(), NottoError> {
     Ok(())
 }
 
-fn display_selection_for_path<P, A>(base_path: P, path: A) -> Result<Option<PathBuf>, NottoError> where P: AsRef<Path>, A: AsRef<Path> {
-    let full_path = base_path.as_ref().join(&path);
-    let items = get_selections_for_path(full_path)?;
+fn display_selection_for_path(notto: &Notto, path: &NottoPath) -> Result<Option<NottoPath>, NottoError> {
+    let path_string: String = path.into();
+    let items = notto.browse(path)?;
     let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(path.as_ref().to_string_lossy())
+        .with_prompt(path_string)
         .items(&items)
         .default(0)
         .interact_on_opt(&Term::stderr())?;
@@ -119,86 +119,13 @@ fn display_selection_for_path<P, A>(base_path: P, path: A) -> Result<Option<Path
     if let Some(select) = selection {
         if let Some(item) = items.get(select) {
             let path = &item.path;
-            let p = path.strip_prefix(&base_path).unwrap();
-            if path.is_dir() {
-                return display_selection_for_path(base_path, p)
+            if item.is_dir() {
+                return display_selection_for_path(notto, path)
             } else {
-                return Ok(Some(PathBuf::from(p)));
+                return Ok(Some(path.clone()));
             }
         }
     }
 
     Ok(None)
-}
-
-fn get_selections_for_path<P>(path: P) -> Result<Vec<PathEntry>, NottoError> where P: AsRef<Path> {
-    let mut result = vec![];
-    for path in fs::read_dir(path)? {
-        if let Ok(dir_entry) = path {
-            let path = dir_entry.path();
-            let hidden = if let Some(file_name) = path.file_name() {
-                file_name.to_string_lossy().starts_with(".")
-            } else {
-                false
-            };
-
-            if !hidden {
-                if path.is_dir() {
-                    if let Some(name) = path.file_name() {
-                        let name = name.to_string_lossy().to_string();
-                        result.push(PathEntry { name, path, is_dir: true });
-                    }
-                } else {
-                    if let Ok(note_text) = fs::read_to_string(&path) {
-                        let note = Note::from_text(note_text);
-                        let mut name = note.get_title();
-
-                        if let Some(file_name) = path.file_name() {
-                            name = format!("{} [{}]", name, file_name.to_string_lossy());
-                        }
-                        result.push(PathEntry { name, path, is_dir: false });
-                    }
-                }
-            }
-        };
-    }
-
-    result.sort();
-
-    Ok(result)
-}
-
-#[derive(Debug, Eq, PartialEq, Ord)]
-struct PathEntry {
-    name: String,
-    path: PathBuf,
-    is_dir: bool,
-}
-
-impl ToString for PathEntry {
-    fn to_string(&self) -> String {
-        if self.is_dir {
-            format!("[{}]", self.name.clone())
-        } else {
-            self.name.clone()
-        }
-    }
-}
-
-impl PartialOrd for PathEntry {
-    // We want directories come first
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let self_dir = self.path.is_dir();
-        let other_dir = other.path.is_dir();
-
-        if self_dir == other_dir {
-            if let (Ok(s), Ok(o)) = (self.name.parse::<i32>(), other.name.parse::<i32>()) {
-                s.partial_cmp(&o)
-            } else {
-                self.name.partial_cmp(&other.name)
-            }
-        } else {
-            if self_dir { Some(std::cmp::Ordering::Less ) } else { Some(std::cmp::Ordering::Greater ) }
-        }
-    }
 }
